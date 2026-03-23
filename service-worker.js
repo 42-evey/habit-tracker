@@ -1,56 +1,21 @@
-const CACHE_NAME = 'evey-habits-v2';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json'
-];
-
-// Install: cache shell assets
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
+const CACHE_NAME = 'evey-habits-v3';
+const ASSETS = ['./', './index.html', './manifest.json'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
-
-// Activate: clean old caches
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-
-// Fetch: cache-first for same-origin, network-first for external
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-
-  // Only handle GET
-  if (event.request.method !== 'GET') return;
-
-  // Same-origin: cache-first with network fallback
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        const networkFetch = fetch(event.request).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => {
-          // Network failed, return cached or offline fallback
-          if (cached) return cached;
-          if (event.request.destination === 'document') {
-            return caches.match('./index.html');
-          }
-        });
-
-        // Return cached immediately, update in background (stale-while-revalidate)
-        return cached || networkFetch;
-      })
-    );
-  }
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(r => {
+        if (r.ok) { const c = r.clone(); caches.open(CACHE_NAME).then(cache => cache.put(e.request, c)); }
+        return r;
+      });
+    }).catch(() => e.request.destination === 'document' ? caches.match('./index.html') : undefined)
+  );
 });
